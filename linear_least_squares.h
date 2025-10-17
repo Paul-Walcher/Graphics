@@ -3,46 +3,127 @@
 #define __LLS__
 
 #include "matrix.h"
+#include <iostream>
 
-template<typename T>
-Matrix<T> linear_least_squares(Matrix<T> A, Matrix<T> x, Matrix<T> b){
+//loss function
 
-	std::pair<T, T> V = A.values();
+typedef Matrix<float> fMatrix;
 
-	if (A.shape().first != b.shape().first){
-		throw std::runtime_error("Shapes A and b are not aligned");
-	}
+float loss(fMatrix X, fMatrix Y){
 
-	Matrix <T> x_back(A.shape().second, 1, V.first, V.first, V.second);
+	fMatrix C = X + Y.negate();
+	C = C.hadamard(C);
 
-	for(int i = 0; i < x.shape().first; i++){
+	return C.sum();
 
-		T val = V.first;
+}
 
-		for(int j = 0; j < A.shape().first; j++){
-			for(int k = 0; k < A.shape().second; k++){
+fMatrix dY(fMatrix X, fMatrix Y, float N){
 
-				if (k == i) continue;
+	return 2 * (X + Y.negate()) * (1 / N);
 
-				val += x.get(k, 0) * A.get(j, k) * A.get(j, i);
+}
 
 
 
+void test(){
+
+int m = 2;
+int n = 5;
+int p = 4;
+
+fMatrix W = fMatrix::frand(m, n, 0.1, 1.0);
+fMatrix B = fMatrix::frand(m, 1, 0.1, 1.0);
+
+
+fMatrix X(4, 5, 
+{
+
+	{4, 4, 2.00, 0, 0},
+	{3.8, 3.9, 2.55, 0, 0},
+	{1.0, 5.0, 0, 2.55, 0},
+	{2.0, 6.0, 0, 1.80, 0}
+
+},
+0.0,
+1.0
+	);
+
+X = X.transpose();
+
+
+fMatrix Y(2, 4, 
+
+	{{1.0, 1.0, 0.0, 0.0},
+	{0.0, 0.0, 1.0, 1.0}}
+,
+0.0, 
+1.0
+
+	);
+
+
+	float lr = 0.1;
+
+
+	for(int _ = 0; _ < 100; _++){
+
+		fMatrix res = W * X;
+
+
+
+		for(int i = 0; i < m; i++){
+			for (int j = 0; j < p; j++){
+
+
+				res.set(i, j, res.get(i, j) + B.get(i, 0));
 			}
 		}
 
-		T div = V.first;
 
-		for(int j = 0; j < A.shape().first; j++){
-			div += std::pow(A.get(j, i), 2);
+		std::cout << loss(res, Y) << "\n";
+
+		//gradient descent
+
+		fMatrix dres = dY(res, Y, n*p);
+		W += (-lr) * (dres * X.transpose());
+
+		for(int i = 0; i < m; i++){
+			float sum = 0.0;
+			for(int j = 0; j < p; j++){
+				sum += dres.get(i, j);
+			}
+
+			B.set(i, 0, B.get(i, 0) - (lr * sum));
 		}
 
-		x_back.set(i, 0, val / div);
 
 	}
 
-	return x_back;
+
+	std::cout << "E" << "\n";
+
+	fMatrix x(1, 5, {{2, 2, 1.50, 0.50, 0.0}}, 0, 1);
+
+	x = x.transpose();
+
+	fMatrix res = W * x;
+
+	p = 1;
+
+
+	for(int i = 0; i < m; i++){
+		for (int j = 0; j < p; j++){
+
+
+			res.set(i, j, res.get(i, j) + B.get(i, 0));
+		}
+	} 
+
+	res.print();
 
 }
+
+
 
 #endif

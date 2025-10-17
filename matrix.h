@@ -9,6 +9,10 @@
 #include <exception>
 #include <cmath>
 #include <tuple>
+#include <random>
+#include <chrono>
+
+
 
 
 template<typename T>
@@ -68,8 +72,11 @@ public:
 	//for applying functions
 	Matrix<T> apply(std::function<T(T)> f, int rowstart, int rowend, int columnstart, int columnend) const;
 
-	Matrix<T> hstack(Matrix<T>& other);
-	Matrix<T> vstack(Matrix<T>& other);
+	Matrix<T> hstack(Matrix<T>& other) const;
+	Matrix<T> vstack(Matrix<T>& other) const;
+
+	Matrix<T> delete_row(int index) const;
+	Matrix<T> delete_column(int index) const;
 
 	void print() const;
 
@@ -85,6 +92,9 @@ public:
 	std::tuple<Matrix<T>, Matrix<T>> QR_decomposition() const;
 	std::tuple<Matrix<T>, Matrix<T>> eigenpairs_QR() const;
 
+	Matrix<T> hadamard(const Matrix<T>& other) const;
+
+	T determinant() const;
 
 	//operators
 	Matrix<T> operator*(const T& value) const;
@@ -103,6 +113,9 @@ public:
 	bool equals(const Matrix<T>& other, std::function<bool(T, T)> cmp) const;
 
 	Matrix<T> operator[](std::pair<std::pair<int, int>, std::pair<int, int>> indices);
+
+	static Matrix<float> frand(int rows, int columns, float b1, float b2);
+	static Matrix<double> drand(int rows, int columns, double b1, double b2);
 
 
 };
@@ -139,6 +152,51 @@ Matrix<T>::Matrix(int rows, int columns, T init_value, T zero_val, T one_val){
 		M.push_back(V);
 
 	}
+
+}
+
+template<typename T>
+Matrix<float> Matrix<T>::frand(int rows, int columns, float b1, float b2){
+
+	std::uniform_real_distribution<float> unif(b1, b2);
+   	std::default_random_engine re;
+   	
+   	Matrix<float> back(rows, columns, 0.0, 0.0, 1.0);
+
+   	for(int i = 0; i < rows; i++)
+   		for(int j = 0; j < columns; j++)
+   			back.set(i, j, unif(re));
+
+   	return back;
+
+}
+
+template<typename T>
+Matrix<double> Matrix<T>::drand(int rows, int columns, double b1, double b2){
+
+	std::uniform_real_distribution<double> unif(b1, b2);
+   	std::default_random_engine re;
+   	
+   	Matrix<double> back(rows, columns, 0.0, 0.0, 1.0);
+
+   	for(int i = 0; i < rows; i++)
+   		for(int j = 0; j < columns; j++)
+   			back.set(i, j, unif(re));
+
+   	return back;
+
+}
+
+template<typename T>
+Matrix<T> Matrix<T>::hadamard(const Matrix<T>& other) const{
+
+	Matrix<T> back(rows, columns, zero_val, zero_val, one_val);
+
+	for(int i = 0; i < rows; i++)
+		for(int j = 0; j < columns; j++)
+			back.set(i, j, get(i, j) * other.get(i, j));
+
+	return back;
 
 }
 
@@ -181,6 +239,39 @@ Matrix<T> Matrix<T>::identity(int size, T zero_val, T one_val) {
 }
 
 template<typename T>
+T Matrix<T>::determinant() const {
+
+	if (rows != columns){
+		throw std::invalid_argument("Matrix has to be square to calculate determinant");
+	}
+
+	if (rows == 1){
+		return get(0, 0);
+	}
+
+	if (rows == 2){
+		return get(0, 0) * get(1, 1) - (get(0, 1) * get(1, 0));
+	}
+
+	T det = zero_val;
+	//construct the smaller matrix
+	for(int j = 0; j < columns; j++){
+
+		T cov = j%2 ? -one_val : one_val;
+
+		//calculate the next determinant
+
+		Matrix<T> next = delete_row(0).delete_column(j);
+
+		det += cov * get(0, j) * next.determinant();
+
+	}
+
+	return det;
+
+}
+
+template<typename T>
 const std::pair<int, int> Matrix<T>::shape() const {
 
 	std::pair<int, int> P;
@@ -193,6 +284,7 @@ const std::pair<int, int> Matrix<T>::shape() const {
 
 template<typename T>
 T Matrix<T>::get(int row, int column) const {
+
 
 	if (row < 0 || row >= rows || column < 0 || column >= columns){
 		throw std::invalid_argument("Specified value does not exist in matrix");
@@ -256,7 +348,7 @@ Matrix<T> Matrix<T>::copy() const {
 }
 
 template<typename T>
-Matrix<T> Matrix<T>::hstack(Matrix<T>& other){
+Matrix<T> Matrix<T>::hstack(Matrix<T>& other) const {
 
 	if (other.rows != rows){
 		throw std::invalid_argument("Matrices have to have the same number of rows.");
@@ -285,7 +377,7 @@ Matrix<T> Matrix<T>::hstack(Matrix<T>& other){
 }
 
 template<typename T>
-Matrix<T> Matrix<T>::vstack(Matrix<T>& other){
+Matrix<T> Matrix<T>::vstack(Matrix<T>& other) const {
 
 	if (other.columns != columns){
 		std::cout << columns << " " << other.columns << "\n";
@@ -551,6 +643,46 @@ Matrix<T> Matrix<T>::apply(std::function<T(T)> f, int rowstart, int rowend, int 
 	return copy;
 
 }
+
+template<typename T>
+Matrix<T> Matrix<T>::delete_row(int index) const {
+
+	Matrix<T> back(rows-1, columns, zero_val, zero_val, one_val);
+
+	int c = 0;
+
+	for(int i = 0; i < rows; i++){
+		if (i == index) continue;
+
+		Matrix<T> R = slice(i, i+1, 0, columns);
+
+		back.place(c++, 0, R);
+	}
+
+	return back;
+
+}
+
+template<typename T>
+Matrix<T> Matrix<T>::delete_column(int index) const {
+
+	Matrix<T> back(rows, columns-1, zero_val, zero_val, one_val);
+
+	int c = 0;
+
+	for(int i = 0; i < columns; i++){
+		if (i == index) continue;
+
+		Matrix<T> C = slice(0, rows, i, i+1);
+
+		back.place(0, c++, C);
+
+	}
+
+	return back;
+
+}
+
 
 template<typename T>
 std::tuple<Matrix<T>, Matrix<T>> Matrix<T>::QR_decomposition() const {

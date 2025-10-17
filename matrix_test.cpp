@@ -36,11 +36,10 @@ int main(){
 			0, 1
 		);
 
-	for(int i = 0; i < 100; i++)
-		x = linear_least_squares(A, x, b);
 
-	x.print();
 
+
+	std::cout << A.determinant() << "\n";
 
 
 	
